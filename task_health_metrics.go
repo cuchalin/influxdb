@@ -13,7 +13,7 @@ type TaskHealthMetrics struct {
 	activeTaskQueueDeltas *prometheus.SummaryVec
 }
 
-func NewTaskHealthMetrics(ths *TaskHealthService) *TaskHealthMetrics {
+func NewTaskHealthMetrics(ths *TaskLatencyMetricsService) *TaskHealthMetrics {
 	const namespace = "task"
 	const subsystem = "health"
 

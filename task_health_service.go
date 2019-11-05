@@ -11,19 +11,19 @@ type FindTasksService interface {
 	FindTasks(ctx context.Context, filter TaskFilter) ([]*Task, int, error)
 }
 
-// TaskHealthService is responsible for monitoring the latency of active tasks in the kv store
-type TaskHealthService struct {
+// TaskLatencyMetricsService is responsible for monitoring the latency of active tasks
+type TaskLatencyMetricsService struct {
 	fts           FindTasksService
 	pollingPeriod time.Duration
 	ctx           context.Context
 	cancel        context.CancelFunc
 }
 
-// NewTaskHealthService takes a TaskHealthService and creates a new TaskHealthService
-func NewTaskHealthService(ctx context.Context, fts FindTasksService, p time.Duration) *TaskHealthService {
+// NewTaskLatencyMetricsService takes a TaskLatencyMetricsService and creates a new TaskLatencyMetricsService
+func NewTaskLatencyMetricsService(ctx context.Context, fts FindTasksService, p time.Duration) *TaskLatencyMetricsService {
 	ctxWithCancel, cancel := context.WithCancel(ctx)
 
-	return &TaskHealthService{
+	return &TaskLatencyMetricsService{
 		fts:           fts,
 		ctx:           ctxWithCancel,
 		cancel:        cancel,
@@ -31,7 +31,7 @@ func NewTaskHealthService(ctx context.Context, fts FindTasksService, p time.Dura
 	}
 }
 
-func (p *TaskHealthService) Open() {
+func (p *TaskLatencyMetricsService) Open() {
 	ticker := time.NewTicker(p.pollingPeriod)
 
 	go func() {
@@ -47,18 +47,18 @@ func (p *TaskHealthService) Open() {
 	}()
 }
 
-func (p *TaskHealthService) Close() {
+func (p *TaskLatencyMetricsService) Close() {
 	p.cancel()
 }
 
 // PollActiveTasks checks the KV store for Active Tasks on a regular interval scheduled by pollingPeriod
-func (p *TaskHealthService) PollActiveTasks() ([]*Task, error) {
+func (p *TaskLatencyMetricsService) PollActiveTasks() ([]*Task, error) {
 	active := true
 	filter := TaskFilter{Active: &active}
 
 	tasks, _, err := p.fts.FindTasks(p.ctx, filter)
 	if err != nil {
-		return nil, errors.New("TaskHealthService could not find tasks")
+		return nil, errors.New("TaskLatencyMetricsService could not find tasks")
 	}
 
 	return tasks, nil
