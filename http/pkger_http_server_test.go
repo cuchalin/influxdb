@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/go-chi/chi"
 	"github.com/influxdata/influxdb"
 	fluxTTP "github.com/influxdata/influxdb/http"
 	"github.com/influxdata/influxdb/pkger"
@@ -20,7 +21,8 @@ import (
 func TestPkgerHTTPServer(t *testing.T) {
 	t.Run("create pkg", func(t *testing.T) {
 		t.Run("should successfully return with valid req body", func(t *testing.T) {
-			svr := fluxTTP.NewHandlerPkg(fluxTTP.ErrorHandler(0), new(pkger.Service))
+			pkgHandler := fluxTTP.NewHandlerPkg(fluxTTP.ErrorHandler(0), new(pkger.Service))
+			svr := newMountedHandler(pkgHandler)
 
 			body := newReqBody(t, fluxTTP.ReqCreatePkg{
 				PkgName:        "name1",
@@ -81,7 +83,8 @@ func TestPkgerHTTPServer(t *testing.T) {
 						},
 					}
 
-					svr := fluxTTP.NewHandlerPkg(fluxTTP.ErrorHandler(0), svc)
+					pkgHandler := fluxTTP.NewHandlerPkg(fluxTTP.ErrorHandler(0), svc)
+					svr := newMountedHandler(pkgHandler)
 
 					body := newReqBody(t, fluxTTP.ReqApplyPkg{
 						DryRun: true,
@@ -136,7 +139,8 @@ func TestPkgerHTTPServer(t *testing.T) {
 						},
 					}
 
-					svr := fluxTTP.NewHandlerPkg(fluxTTP.ErrorHandler(0), svc)
+					pkgHandler := fluxTTP.NewHandlerPkg(fluxTTP.ErrorHandler(0), svc)
+					svr := newMountedHandler(pkgHandler)
 
 					body := newReqApplyYMLBody(t, influxdb.ID(9000), true)
 
@@ -175,7 +179,8 @@ func TestPkgerHTTPServer(t *testing.T) {
 			},
 		}
 
-		svr := fluxTTP.NewHandlerPkg(fluxTTP.ErrorHandler(0), svc)
+		pkgHandler := fluxTTP.NewHandlerPkg(fluxTTP.ErrorHandler(0), svc)
+		svr := newMountedHandler(pkgHandler)
 
 		body := newReqBody(t, fluxTTP.ReqApplyPkg{
 			OrgID: influxdb.ID(9000).String(),
@@ -298,4 +303,10 @@ func (f *fakeSVC) Apply(ctx context.Context, orgID influxdb.ID, pkg *pkger.Pkg) 
 		panic("not implemented")
 	}
 	return f.ApplyFn(ctx, orgID, pkg)
+}
+
+func newMountedHandler(rh fluxTTP.ResourceHandler) chi.Router {
+	r := chi.NewRouter()
+	r.Mount(rh.Prefix(), rh)
+	return r
 }
