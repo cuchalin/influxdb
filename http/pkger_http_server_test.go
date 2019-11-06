@@ -1,4 +1,4 @@
-package pkger_test
+package http_test
 
 import (
 	"bytes"
@@ -17,12 +17,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func TestHTTPServer(t *testing.T) {
+func TestPkgerHTTPServer(t *testing.T) {
 	t.Run("create pkg", func(t *testing.T) {
 		t.Run("should successfully return with valid req body", func(t *testing.T) {
-			svr := pkger.NewHTTPServer(fluxTTP.ErrorHandler(0), new(pkger.Service))
+			svr := fluxTTP.NewHandlerPkg(fluxTTP.ErrorHandler(0), new(pkger.Service))
 
-			body := newReqBody(t, pkger.ReqCreatePkg{
+			body := newReqBody(t, fluxTTP.ReqCreatePkg{
 				PkgName:        "name1",
 				PkgDescription: "desc1",
 				PkgVersion:     "v1",
@@ -33,7 +33,7 @@ func TestHTTPServer(t *testing.T) {
 				Do(svr).
 				ExpectStatus(t, http.StatusOK).
 				ExpectBody(func(buf *bytes.Buffer) {
-					var resp pkger.RespCreatePkg
+					var resp fluxTTP.RespCreatePkg
 					decodeBody(t, buf, &resp)
 
 					pkg := resp.Package
@@ -81,9 +81,9 @@ func TestHTTPServer(t *testing.T) {
 						},
 					}
 
-					svr := pkger.NewHTTPServer(fluxTTP.ErrorHandler(0), svc)
+					svr := fluxTTP.NewHandlerPkg(fluxTTP.ErrorHandler(0), svc)
 
-					body := newReqBody(t, pkger.ReqApplyPkg{
+					body := newReqBody(t, fluxTTP.ReqApplyPkg{
 						DryRun: true,
 						OrgID:  influxdb.ID(9000).String(),
 						Pkg:    bucketPkg(t, pkger.EncodingJSON),
@@ -94,7 +94,7 @@ func TestHTTPServer(t *testing.T) {
 						Do(svr).
 						ExpectStatus(t, http.StatusOK).
 						ExpectBody(func(buf *bytes.Buffer) {
-							var resp pkger.RespApplyPkg
+							var resp fluxTTP.RespApplyPkg
 							decodeBody(t, buf, &resp)
 
 							assert.Len(t, resp.Summary.Buckets, 1)
@@ -136,7 +136,7 @@ func TestHTTPServer(t *testing.T) {
 						},
 					}
 
-					svr := pkger.NewHTTPServer(fluxTTP.ErrorHandler(0), svc)
+					svr := fluxTTP.NewHandlerPkg(fluxTTP.ErrorHandler(0), svc)
 
 					body := newReqApplyYMLBody(t, influxdb.ID(9000), true)
 
@@ -145,7 +145,7 @@ func TestHTTPServer(t *testing.T) {
 						Do(svr).
 						ExpectStatus(t, http.StatusOK).
 						ExpectBody(func(buf *bytes.Buffer) {
-							var resp pkger.RespApplyPkg
+							var resp fluxTTP.RespApplyPkg
 							decodeBody(t, buf, &resp)
 
 							assert.Len(t, resp.Summary.Buckets, 1)
@@ -175,9 +175,9 @@ func TestHTTPServer(t *testing.T) {
 			},
 		}
 
-		svr := pkger.NewHTTPServer(fluxTTP.ErrorHandler(0), svc)
+		svr := fluxTTP.NewHandlerPkg(fluxTTP.ErrorHandler(0), svc)
 
-		body := newReqBody(t, pkger.ReqApplyPkg{
+		body := newReqBody(t, fluxTTP.ReqApplyPkg{
 			OrgID: influxdb.ID(9000).String(),
 			Pkg:   bucketPkg(t, pkger.EncodingJSON),
 		})
@@ -186,7 +186,7 @@ func TestHTTPServer(t *testing.T) {
 			Do(svr).
 			ExpectStatus(t, http.StatusCreated).
 			ExpectBody(func(buf *bytes.Buffer) {
-				var resp pkger.RespApplyPkg
+				var resp fluxTTP.RespApplyPkg
 				decodeBody(t, buf, &resp)
 
 				assert.Len(t, resp.Summary.Buckets, 1)
@@ -198,17 +198,49 @@ func TestHTTPServer(t *testing.T) {
 func bucketPkg(t *testing.T, encoding pkger.Encoding) *pkger.Pkg {
 	t.Helper()
 
-	var ext string
+	var pkgStr string
 	switch encoding {
 	case pkger.EncodingJSON:
-		ext = ".json"
+		pkgStr = `
+{
+  "apiVersion": "0.1.0",
+  "kind": "Package",
+  "meta": {
+    "pkgName": "pkg_name",
+    "pkgVersion": "1",
+    "description": "pack description"
+  },
+  "spec": {
+    "resources": [
+      {
+        "kind": "Bucket",
+        "name": "rucket_11",
+        "retention_period": "1h",
+        "description": "bucket 1 description"
+      }
+    ]
+  }
+}
+`
 	case pkger.EncodingYAML:
-		ext = ".yml"
+		pkgStr = `apiVersion: 0.1.0
+kind: Package
+meta:
+  pkgName:      pkg_name
+  pkgVersion:   1
+  description:  pack description
+spec:
+  resources:
+    - kind: Bucket
+      name: rucket_11
+      retention_period: 1h
+      description: bucket 1 description
+`
 	default:
 		require.FailNow(t, "invalid encoding provided: "+encoding.String())
 	}
 
-	pkg, err := pkger.Parse(encoding, pkger.FromFile("testdata/bucket"+ext))
+	pkg, err := pkger.Parse(encoding, pkger.FromString(pkgStr))
 	require.NoError(t, err)
 	return pkg
 }
@@ -217,7 +249,7 @@ func newReqApplyYMLBody(t *testing.T, orgID influxdb.ID, dryRun bool) *bytes.Buf
 	t.Helper()
 
 	var buf bytes.Buffer
-	err := yaml.NewEncoder(&buf).Encode(pkger.ReqApplyPkg{
+	err := yaml.NewEncoder(&buf).Encode(fluxTTP.ReqApplyPkg{
 		DryRun: dryRun,
 		OrgID:  orgID.String(),
 		Pkg:    bucketPkg(t, pkger.EncodingYAML),
